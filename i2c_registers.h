@@ -43,3 +43,4 @@
 #define REG_OUT_PINS		169
 
 #define GPIO_DIRECT_BASE	170	// map registers to GPIO pins for direct read and write
+#define REG_DFU_RESET	199 //Put Pico into DFU Remotely
