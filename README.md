@@ -178,16 +178,22 @@ There is an LED on the Pico. When the firmware is running, it flashes slowly. Wh
 
 ### Firmware Design
 
-The Pico listens to I2C address 0x1D and you can read and write to registers at this address. Writes always send one byte.
-Reads always return four bytes of data.
-A read from a register returns that register and the next three.
-All registers are 8 bit and are initialized to zero at power on, and after a software reset.
+The Pico listens to I2C address 0x1D and you can read and write to registers at this I2C address. Writes always send a one-byte address and one byte of data. Since the address is one byte, the data item is stored in a 256 byte array named "Registers".
+All registers are initialized to zero at power on and after a software reset.
+You can write to any register, not just the ones in the table below.
+So a write to register REG_ANTENNA_TUNER (equal to 7) looks like this:
 
-Since the register address is one byte, there are 256 registers. This is implemented as a 256 byte static array.
-You can write to any register, not just the ones in the table below. 
-In general, a read from a register returns the last value written, but there are exceptions noted in the table below.
-The polling loop in main.c can see all 256 registers and can implement an action for any register.
-Registers 200 and up can be claimed by SDR authors, and are used for features that are optional or unique to an SDR program.
+Registers[REG_ANTENNA_TUNER] = datum;
+
+Reads always send a one byte address and return four bytes of data.
+A read from register REG_ANTENNA_TUNER returns Registers[REG_ANTENNA_TUNER] and the next three registers.
+
+There are some exceptions to this general pattern and all are noted below.
+
+The Pico is an I2C slave device, so reads and writes result in a call to the interrupt service routine
+in i2c_slave_handler.c. This routine must return fast to avoid hanging the bus. So a typical program would
+not alter i2c_slave_handler.c. It would have a polling loop in main.c to check for changes in any registers
+it cares about and would perform needed actions there.
 
 #### Frequency Codes
 
@@ -313,10 +319,13 @@ SDR software is not required to implement this command. In the future there may 
 |10|REG_FIRMWARE_MINOR|Read only. Firmware minor version|
 |11|REG_RF_INPUTS|The receive input usage, 0, 1 or 2.|
 
-REG_RF_INPUTS determines how the SMA receive input J9 and the Pure Signal input J10 are used. Mode 0 means that the receive input is not used,
-but the Pure Signal input is available. Mode 1 means that the receive input is used instead of the usual HL2 input,
-and the Pure Signal input is not available. Mode 2 means that the receive input is used for receive, and the Pure
-Signal input is used for transmit.
+REG_RF_INPUTS determines how the SMA receive input J9 and the Pure Signal input J10 are used.
+Mode 0 means that J9 is not used, and the usual HL2 input is the receive input.
+In mode 0 the Pure Signal input J10 is mixed with the receive signal.
+For modes 1 and 2, J9 is used instead of the usual HL2 receive input.
+Mode 1 means that J9 is used for the receive signal and the Pure Signal input is not available.
+Mode 2 means that for receive, J9 is used for the receive signal;
+and that for transmit, the Pure Signal input is passed to the HL2 instead of a receive signal.
 
 
 |Register|Name|Description|
@@ -343,7 +352,9 @@ If a transverter is in use, the Rx frequency includes the transverter offset.
 
 The Pico has one 12-bit ADC that can read from ADC0, ADC1 and ADC2 on pins GPIO26, GPIO27 and GPIO28.
 Always read the most significant byte first because that triggers the conversion.
-Since reads always return four bytes, you can return two ADC values at once.
+A read from ADC0 returns the value of ADC0 and ADC1 in the four byte response.
+A read from ADC1 returns the value of ADC1 and ADC2.
+Reading the two values in quick succession can be used to calculate SWR from forward and reverse power.
 
 |Register|Name|Description|
 |--------|----|-----------|
@@ -358,26 +369,16 @@ A zero means the first (default) antenna.
 |--------|----|-----------|
 |32|REG_OP_MODE|Set the operating Mode|
 
-Operating modes values (Curently Based on Thetis internal definitions):
 
-|Mode|Value|
-|---|---|
-|LSB|0|
-|USB|1|
-|DSB|2|
-|CWL|3|
-|CWU|4|
-|FM|5|
-|AM|6|
-|DIGU|7|
-|SPEC|8|
-|DIGL|9|
-|SAM|10|
-|DRM|11|
-|AM_LSB|12|
-|AM_USB|13|
+||Mode|Value|Mode|Value|Mode|Value|Mode|Value|
+|---|---|---|---|---|---|---|---|---|
+||LSB|0|USB|1|DSB|2|CWL|3|
+||CWU|4|FM|5|AM|6|DIGU|7|
+||SPEC|8|DIGL|9|SAM|10|DRM|11|
+||AM_LSB|12|AM_USB|13|
 
-Additional modes can be appended to the bottom of the list.
+Operating mode values are based on Thetis internal definitions.
+Note that value zero does not mean "unspecified".
 
 |Register|Name|Description|
 |--------|----|-----------|

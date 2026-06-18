@@ -13,11 +13,12 @@ uint8_t hertz2fcode(uint64_t hertz)
 
 	if (hertz == 0)
 		return 0;
-	if (hertz < 20000)
+	code = (uint8_t)(0.5 + 15.47 * log(hertz / 18748.1));
+	if (code < 1)
 		return 1;
-	if (hertz > 270000000000)
+	else if (code > 255)
 		return 255;
-	return (uint8_t)(0.5 + 15.47 * log(hertz / 18748.1));
+	return code;
 }
 
 uint64_t fcode2hertz(uint8_t code)
